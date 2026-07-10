@@ -12,12 +12,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
 .chip{background:rgba(0,0,0,0.45);color:#fff;border-radius:14px;padding:6px 14px;font-weight:700;font-size:18px;line-height:1.3;}
 #hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;display:flex;justify-content:center;gap:10px;pointer-events:none;z-index:5;}
 #mm{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 10px);width:120px;height:120px;z-index:5;pointer-events:none;}
-#spd{position:fixed;right:14px;bottom:130px;z-index:5;pointer-events:none;font-size:22px;}
+#spd{position:fixed;right:14px;bottom:196px;z-index:5;pointer-events:none;font-size:22px;}
 .rbtn{position:fixed;z-index:6;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;touch-action:none;cursor:pointer;}
 #btnL,#btnR{bottom:26px;width:92px;height:92px;border-radius:50%;background:rgba(255,255,255,0.22);border:3px solid rgba(255,255,255,0.85);font-size:40px;}
 #btnL{left:20px;}
 #btnR{left:130px;}
-#btnBrake{right:20px;bottom:36px;width:130px;height:72px;border-radius:36px;background:rgba(220,60,50,0.55);border:3px solid rgba(255,255,255,0.85);font-size:24px;}
+#btnWheelie{right:20px;bottom:116px;width:130px;height:58px;border-radius:29px;background:rgba(90,90,220,0.55);border:3px solid rgba(255,255,255,0.85);font-size:19px;}
+#btnAccel{right:20px;bottom:36px;width:130px;height:70px;border-radius:35px;background:rgba(40,180,90,0.6);border:3px solid rgba(255,255,255,0.85);font-size:23px;}
 #btnReset{right:14px;top:calc(env(safe-area-inset-top,0px) + 10px);padding:10px 12px;border-radius:12px;background:rgba(0,0,0,0.45);font-size:15px;min-height:44px;}
 #btnMute{right:14px;top:calc(env(safe-area-inset-top,0px) + 62px);padding:10px 14px;border-radius:12px;background:rgba(0,0,0,0.45);font-size:18px;min-height:44px;}
 #cd{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:110px;font-weight:700;color:#fff;text-shadow:0 4px 18px rgba(0,0,0,0.5);pointer-events:none;z-index:8;}
@@ -44,7 +45,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
 <div class="chip" id="spd">0 km/h</div>
 <div class="rbtn" id="btnL">◀</div>
 <div class="rbtn" id="btnR">▶</div>
-<div class="rbtn" id="btnBrake">ブレーキ</div>
+<div class="rbtn" id="btnWheelie">ウィリー</div>
+<div class="rbtn" id="btnAccel">アクセル</div>
 <div class="rbtn" id="btnReset">コースへもどる</div>
 <div class="rbtn" id="btnMute">🔊</div>
 <div id="cd"></div>
@@ -53,8 +55,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
   <div class="panel">
     <h1>🏍️ ぴよモトクロス</h1>
     <p>でこぼこコースを3しゅう！ ライバルより先にゴールしよう！</p>
-    <p>◀▶ボタンでハンドル(アクセルは自動)</p>
-    <p>大ジャンプのあと、うまく着地すると<b>ブースト</b>！</p>
+    <p>◀▶でハンドル、アクセルボタンで加速</p>
+    <p>ジャンプ台で<b>ウィリー</b>を押すと優雅にバックフリップ！</p>
+    <p>ガタガタ道はウィリーで減速をおさえられる。水たまりはすべるので注意！</p>
     <button class="bigbtn" id="btnStart">スタート！</button>
   </div>
 </div>
@@ -147,17 +150,37 @@ const JUMPS = [
   {s:0.615, up:0.009, flat:0.003, down:0.015, h:2.0},
   {s:0.855, up:0.012, flat:0.005, down:0.021, h:3.2}
 ];
+const WASH_A = 0.44, WASH_B = 0.53; // ウォッシュボード(ガタガタ道)区間
 function featureH(u){
   u = wrap01(u);
   let h = 0;
   for(const j of JUMPS) h += rampF(u, j.s, j.up, j.flat, j.down, j.h);
-  const a=0.44, b=0.53; // ウォッシュボード区間
-  if(u>a && u<b){
-    const t = (u-a)/(b-a);
-    const wave = Math.sin((u-a)*trackLen/4.2*Math.PI*2);
+  if(u>WASH_A && u<WASH_B){
+    const t = (u-WASH_A)/(WASH_B-WASH_A);
+    const wave = Math.sin((u-WASH_A)*trackLen/4.2*Math.PI*2);
     h += 0.32*Math.sin(t*Math.PI)*wave*wave;
   }
   return h;
+}
+
+// ===== 水たまり(滑りやすいゾーン) =====
+const PUDDLES = [
+  {u:0.225, halfLen:9, halfLat:3.2},
+  {u:0.385, halfLen:8, halfLat:2.8},
+  {u:0.735, halfLen:10, halfLat:3.4}
+];
+function puddleFactor(u, lat){
+  let best = 0;
+  for(const p of PUDDLES){
+    let du = wrap01(u-p.u); if(du>0.5) du -= 1;
+    const dist = Math.abs(du)*trackLen;
+    if(dist < p.halfLen && Math.abs(lat) < p.halfLat){
+      const tu = 1-clamp(dist/p.halfLen, 0, 1);
+      const tl = 1-clamp(Math.abs(lat)/p.halfLat, 0, 1);
+      best = Math.max(best, Math.min(tu, tl));
+    }
+  }
+  return best;
 }
 
 // ===== 地面高さ問い合わせ =====
@@ -253,6 +276,22 @@ function groundInfo(x, z, hint){
   scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide})));
 }
 
+// ===== 水たまり見た目 =====
+{
+  const pmat = new THREE.MeshPhongMaterial({color:0x4fb3e8, transparent:true, opacity:0.6, shininess:120, side:THREE.DoubleSide});
+  for(const p of PUDDLES){
+    const s = samples[Math.floor(wrap01(p.u)*N)];
+    const y = trackYat(p.u) + featureH(p.u) + 0.08;
+    const geo = new THREE.CircleGeometry(1, 20);
+    geo.scale(p.halfLat*1.6, p.halfLen*1.1, 1);
+    const mesh = new THREE.Mesh(geo, pmat);
+    mesh.position.set(s.pos.x, y, s.pos.z);
+    mesh.rotation.x = -Math.PI/2;
+    mesh.rotation.z = -Math.atan2(s.tan.x, s.tan.z);
+    scene.add(mesh);
+  }
+}
+
 // ===== スタートライン・ゲート =====
 {
   const s = samples[0];
@@ -341,8 +380,46 @@ function groundInfo(x, z, hint){
   }
 }
 
-// ===== バイク+ぴよ作成 =====
-function buildBike(bikeColor, birdColor, helmetColor){
+// ===== 頭のアクセサリー =====
+function addAccessory(headG, type, color){
+  const am = new THREE.MeshLambertMaterial({color});
+  if(type === 'mohawk'){
+    for(let i=0;i<5;i++){
+      const hh = 0.15-Math.abs(i-2)*0.028;
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.045, hh, 6), am);
+      c.position.set(0, 0.2+hh/2, 0.15-i*0.075);
+      headG.add(c);
+    }
+  } else if(type === 'catears'){
+    for(const sd of [-1,1]){
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.18, 4), am);
+      c.position.set(0.14*sd, 0.27, -0.03);
+      c.rotation.z = sd*0.4;
+      c.rotation.y = Math.PI/4;
+      headG.add(c);
+    }
+  } else if(type === 'horns'){
+    for(const sd of [-1,1]){
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.26, 6), am);
+      c.position.set(0.12*sd, 0.29, 0.06);
+      c.rotation.z = sd*0.55;
+      c.rotation.x = -0.35;
+      headG.add(c);
+    }
+  } else if(type === 'spikes'){
+    const dirs = [[0,1,0],[0.7,0.7,0],[-0.7,0.7,0],[0,0.7,0.7],[0,0.7,-0.7],[0.5,0.55,0.5],[-0.5,0.55,-0.5],[0.5,0.55,-0.5],[-0.5,0.55,0.5]];
+    for(const d of dirs){
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.15, 5), am);
+      const v = new THREE.Vector3(d[0],d[1],d[2]).normalize();
+      c.position.copy(v).multiplyScalar(0.19).add(new THREE.Vector3(0,0.15,0));
+      c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), v);
+      headG.add(c);
+    }
+  }
+}
+
+// ===== バイク+人型ライダー作成 =====
+function buildBike(bikeColor, suitColor, accColor, accType){
   const g = new THREE.Group();
   g.rotation.order = 'YXZ';
   const matBike = new THREE.MeshLambertMaterial({color:bikeColor});
@@ -373,34 +450,48 @@ function buildBike(bikeColor, birdColor, helmetColor){
   fender.position.set(0, 1.0, 0.85); fender.rotation.x = -0.2; g.add(fender);
   const exh = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.09,0.9,8), gray);
   exh.rotation.x = Math.PI/2; exh.position.set(0.17, 0.72, -0.55); g.add(exh);
-  // ぴよライダー
-  const bird = new THREE.Group();
-  const bm = new THREE.MeshLambertMaterial({color:birdColor});
-  bird.add(new THREE.Mesh(new THREE.SphereGeometry(0.36,14,12), bm));
-  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.09,0.22,8), new THREE.MeshLambertMaterial({color:0xf6902a}));
-  beak.rotation.x = Math.PI/2; beak.position.set(0, 0.05, 0.38); bird.add(beak);
-  const eyeG = new THREE.SphereGeometry(0.05,8,6);
+  // 人型ライダー
+  const rider = new THREE.Group();
+  const suitMat = new THREE.MeshLambertMaterial({color:suitColor});
+  const skinMat = new THREE.MeshLambertMaterial({color:0xffd7a8});
+  const pantsMat = new THREE.MeshLambertMaterial({color:0x2a2a2a});
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.42,0.24), suitMat);
+  torso.position.set(0, 0.24, -0.06); torso.rotation.x = -0.32;
+  rider.add(torso);
+  const headG = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.21,14,12), skinMat);
+  headG.add(head);
+  const eyeG = new THREE.SphereGeometry(0.032,8,6);
   for(const sd of [-1,1]){
     const e = new THREE.Mesh(eyeG, black);
-    e.position.set(0.14*sd, 0.14, 0.3);
-    bird.add(e);
+    e.position.set(0.085*sd, 0.02, 0.185);
+    headG.add(e);
   }
-  const wingG = new THREE.BoxGeometry(0.07,0.3,0.4);
-  const wings = [];
+  headG.position.set(0, 0.6, 0.06);
+  rider.add(headG);
+  const armG = new THREE.CylinderGeometry(0.055,0.06,0.48,7);
+  const arms = [];
   for(const sd of [-1,1]){
-    const w = new THREE.Mesh(wingG, bm);
-    w.position.set(0.38*sd, -0.02, 0);
-    bird.add(w); wings.push(w);
+    const arm = new THREE.Mesh(armG, suitMat);
+    arm.position.set(0.19*sd, 0.4, 0.34);
+    arm.rotation.x = -1.05; arm.rotation.z = sd*0.15;
+    rider.add(arm); arms.push(arm);
   }
-  const hel = new THREE.Mesh(new THREE.SphereGeometry(0.3,12,8,0,Math.PI*2,0,Math.PI/2), new THREE.MeshLambertMaterial({color:helmetColor}));
-  hel.position.set(0, 0.16, -0.02); bird.add(hel);
-  bird.position.set(0, 1.42, -0.15);
-  g.add(bird);
+  const legG = new THREE.CylinderGeometry(0.07,0.078,0.48,7);
+  for(const sd of [-1,1]){
+    const leg = new THREE.Mesh(legG, pantsMat);
+    leg.position.set(0.15*sd, -0.02, -0.22);
+    leg.rotation.x = 0.55;
+    rider.add(leg);
+  }
+  addAccessory(headG, accType, accColor);
+  rider.position.set(0, 1.08, -0.12);
+  g.add(rider);
   scene.add(g);
   const sh = new THREE.Mesh(new THREE.CircleGeometry(0.95,14), new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.3, depthWrite:false}));
   sh.rotation.x = -Math.PI/2;
   scene.add(sh);
-  return {group:g, wF, wR, wings, shadow:sh};
+  return {group:g, wF, wR, arms, shadow:sh};
 }
 
 // ===== レーサー初期化 =====
@@ -415,18 +506,18 @@ function slotPos(sl){
     heading: Math.atan2(s.tan.x, s.tan.z)
   };
 }
-const pv = buildBike(0x1fa8a0, 0xffd94a, 0xe23b2e);
+const pv = buildBike(0x1fa8a0, 0xffd94a, 0xe23b2e, 'mohawk');
 const player = {vis:pv, x:0, z:0, y:0, vy:0, heading:0, speed:0, grounded:true,
-  idx:START_IDX, u:startU, prevU:startU, lap:0, cp:false, airT:0, boostT:0,
-  finished:false, prevGy:0, pitch:0, roll:0, gy:0, gDist:0};
+  idx:START_IDX, u:startU, prevU:startU, lat:0, lap:0, cp:false, airT:0, boostT:0,
+  finished:false, prevGy:0, pitch:0, roll:0, gy:0, gDist:0, steerCur:0, flipping:false, flipAngle:0, flipSpeed:0};
 const AI_DEF = [
-  {c:0xd44a9a, b:0x9fd4ff, h:0x3a6fd8, base:24.5},
-  {c:0xe07b1f, b:0xbfe89a, h:0x2f9e44, base:26.5},
-  {c:0x6a4ad4, b:0xffc0cb, h:0xf2b705, base:28.5}
+  {c:0xd44a9a, b:0x9fd4ff, h:0x3a6fd8, base:24.5, acc:'catears'},
+  {c:0xe07b1f, b:0xbfe89a, h:0x2f9e44, base:26.5, acc:'horns'},
+  {c:0x6a4ad4, b:0xffc0cb, h:0xf2b705, base:28.5, acc:'spikes'}
 ];
 const AI_SLOTS = [0, 2, 3];
 const ais = AI_DEF.map(d=>({
-  vis: buildBike(d.c, d.b, d.h),
+  vis: buildBike(d.c, d.b, d.h, d.acc),
   colStr: '#'+d.c.toString(16).padStart(6,'0'),
   base: d.base, uTotal: startU, off:0, startLat:0,
   phase: Math.random()*6.28, wRate: 0.25+Math.random()*0.2,
@@ -442,8 +533,9 @@ function placeRacers(){
   const gi = groundInfo(sp.x, sp.z, START_IDX);
   Object.assign(player, {
     x:sp.x, z:sp.z, y:gi.h, vy:0, heading:sp.heading, speed:0, grounded:true,
-    idx:gi.idx, u:gi.u, prevU:gi.u, lap:0, cp:false, airT:0, boostT:0,
-    finished:false, prevGy:gi.h, pitch:0, roll:0, gy:gi.h, gDist:gi.dist
+    idx:gi.idx, u:gi.u, prevU:gi.u, lat:gi.lat, lap:0, cp:false, airT:0, boostT:0,
+    finished:false, prevGy:gi.h, pitch:0, roll:0, gy:gi.h, gDist:gi.dist,
+    steerCur:0, flipping:false, flipAngle:0, flipSpeed:0
   });
   ais.forEach((a, i)=>{
     const sl = AI_SLOTS[i];
@@ -467,7 +559,7 @@ function resetRace(){
 placeRacers();
 
 // ===== 入力 =====
-const input = {left:false, right:false, brake:false};
+const input = {left:false, right:false, accel:false, wheelie:false};
 function bindHold(id, prop){
   const el = document.getElementById(id);
   const on = e=>{ e.preventDefault(); input[prop] = true; };
@@ -477,16 +569,18 @@ function bindHold(id, prop){
   el.addEventListener('pointercancel', off);
   el.addEventListener('pointerleave', off);
 }
-bindHold('btnL','left'); bindHold('btnR','right'); bindHold('btnBrake','brake');
+bindHold('btnL','left'); bindHold('btnR','right'); bindHold('btnAccel','accel'); bindHold('btnWheelie','wheelie');
 window.addEventListener('keydown', e=>{
   if(e.key==='ArrowLeft'){ input.left = true; e.preventDefault(); }
   if(e.key==='ArrowRight'){ input.right = true; e.preventDefault(); }
-  if(e.key==='ArrowDown'||e.key===' '){ input.brake = true; e.preventDefault(); }
+  if(e.key==='ArrowUp'||e.key===' '){ input.accel = true; e.preventDefault(); }
+  if(e.key==='Shift'||e.key==='x'||e.key==='X'){ input.wheelie = true; e.preventDefault(); }
 });
 window.addEventListener('keyup', e=>{
   if(e.key==='ArrowLeft') input.left = false;
   if(e.key==='ArrowRight') input.right = false;
-  if(e.key==='ArrowDown'||e.key===' ') input.brake = false;
+  if(e.key==='ArrowUp'||e.key===' ') input.accel = false;
+  if(e.key==='Shift'||e.key==='x'||e.key==='X') input.wheelie = false;
 });
 document.addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
 document.addEventListener('contextmenu', e=>e.preventDefault());
@@ -607,11 +701,12 @@ for(let i=0;i<50;i++){
   scene.add(sp);
   dusts.push({sp, life:0, vx:0, vy:0, vz:0});
 }
-function spawnDust(x, y, z, pow){
+function spawnDust(x, y, z, pow, color){
   for(const d of dusts){
     if(d.life <= 0){
       d.life = 0.55;
       d.sp.visible = true;
+      d.sp.material.color.setHex(color || 0xc7a878);
       d.sp.position.set(x+(Math.random()-0.5)*0.6, y+0.2, z+(Math.random()-0.5)*0.6);
       d.vx = (Math.random()-0.5)*2*pow;
       d.vy = 1.5+Math.random()*2*pow;
@@ -638,21 +733,31 @@ function updateDust(dt){
 }
 
 // ===== プレイヤー更新 =====
-let dustAcc = 0;
+let dustAcc = 0, splashAcc = 0;
 function updatePlayer(dt){
   const racing = state === 'race';
-  const steer = (input.right?1:0) - (input.left?1:0);
-  if(racing && !player.finished){
-    const eff = (player.grounded?1:0.4) * clamp(player.speed/7+0.15, 0, 1);
-    player.heading -= steer*2.5*eff*dt;
+  const steerTarget = (input.right?1:0) - (input.left?1:0);
+  player.steerCur = lerp(player.steerCur, steerTarget, 1-Math.exp(-7*dt));
+  const puddleT = puddleFactor(player.u, player.lat);
+  const inWash = player.u > WASH_A && player.u < WASH_B;
+  if(racing && !player.finished && !player.flipping){
+    const eff = (player.grounded?1:0.4) * clamp(player.speed/7+0.15, 0, 1) * (1-puddleT*0.6) * (input.wheelie?0.72:1);
+    player.heading -= player.steerCur*1.5*eff*dt;
   }
-  // 速度
+  // 速度(アクセル方式)
   const onTrack = player.gDist < HALF+0.8;
   const maxSp = (onTrack?33:14) * (player.boostT>0?1.28:1);
-  if(racing && !player.finished){
-    if(input.brake) player.speed = Math.max(0, player.speed-32*dt);
-    else player.speed += (maxSp-player.speed)*(player.boostT>0?1.1:0.55)*dt;
-    player.speed -= player.speed*Math.abs(steer)*0.22*dt;
+  if(racing && !player.finished && !player.flipping){
+    if(input.accel) player.speed += (maxSp-player.speed)*(player.boostT>0?1.15:0.62)*dt;
+    else player.speed = Math.max(0, player.speed - 9*dt);
+    player.speed -= player.speed*Math.abs(player.steerCur)*0.16*dt;
+    if(inWash){
+      const washDecel = input.wheelie ? 1.0 : 5.5;
+      player.speed = Math.max(0, player.speed - washDecel*dt);
+    }
+    if(puddleT > 0.05) player.speed -= player.speed*0.03*puddleT*dt;
+  } else if(player.flipping){
+    if(input.accel) player.speed += (maxSp*0.7-player.speed)*0.5*dt;
   } else {
     player.speed = Math.max(0, player.speed-12*dt);
   }
@@ -661,6 +766,12 @@ function updatePlayer(dt){
   const dirX = Math.sin(player.heading), dirZ = Math.cos(player.heading);
   player.x += dirX*player.speed*dt;
   player.z += dirZ*player.speed*dt;
+  if(puddleT > 0.05 && player.grounded){
+    const sL = samples[player.idx].left;
+    const slip = puddleT*player.steerCur*5.5;
+    player.x += sL.x*slip*dt;
+    player.z += sL.z*slip*dt;
+  }
   const r = Math.hypot(player.x, player.z);
   if(r > 185){ player.x *= 185/r; player.z *= 185/r; player.speed *= 0.9; }
   // 上下(弾道+接地追従)
@@ -683,9 +794,32 @@ function updatePlayer(dt){
     player.grounded = false;
   }
   player.y = ny;
-  if(!player.grounded) player.airT += dt;
+  if(!player.grounded){
+    player.airT += dt;
+    if(wasG){
+      // 離陸した瞬間:ジャンプ台からの発進かどうか判定
+      let onRamp = false;
+      for(const j of JUMPS){
+        const rel = wrap01(gi.u - j.s);
+        if(rel < j.up+j.flat+0.025){ onRamp = true; break; }
+      }
+      if(onRamp && input.wheelie && racing && !player.finished){
+        player.flipping = true;
+        player.flipAngle = 0;
+        player.flipSpeed = (Math.PI*2)/0.95;
+      }
+    }
+    if(player.flipping) player.flipAngle += player.flipSpeed*dt;
+  }
   if(player.grounded && !wasG){
-    if(player.airT > 0.55 && racing && !player.finished){
+    if(player.flipping){
+      popup('優雅なバックフリップ！🌀');
+      sfxBoost();
+      player.boostT = 1.3;
+      player.flipping = false;
+      player.pitch = 0;
+      for(let i=0;i<8;i++) spawnDust(player.x, player.y, player.z, 1.6);
+    } else if(player.airT > 0.55 && racing && !player.finished){
       player.boostT = 1.3;
       popup('ナイスジャンプ！ ブースト🔥');
       sfxBoost();
@@ -696,12 +830,19 @@ function updatePlayer(dt){
     }
     player.airT = 0;
   }
-  // 走行土煙
+  // 走行土煙・水しぶき
   if(player.grounded && player.speed > 10){
     dustAcc += dt;
     while(dustAcc > 0.05){
       dustAcc -= 0.05;
       spawnDust(player.x-dirX*0.9, player.y, player.z-dirZ*0.9, 0.8+player.speed*0.02);
+    }
+  }
+  if(player.grounded && player.speed > 6 && puddleT > 0.1){
+    splashAcc += dt;
+    while(splashAcc > 0.045){
+      splashAcc -= 0.045;
+      spawnDust(player.x-dirX*0.7, player.y, player.z-dirZ*0.7, 1.0+player.speed*0.03, 0x66c9ff);
     }
   }
   // ラップ判定
@@ -715,21 +856,27 @@ function updatePlayer(dt){
   }
   player.prevU = u;
   player.u = u;
+  player.lat = gi.lat;
   // 姿勢
-  const targetPitch = Math.atan2(player.vy, Math.max(player.speed, 6));
-  player.pitch = lerp(player.pitch, clamp(targetPitch, -0.55, 0.65), 1-Math.exp(-6*dt));
-  player.roll = lerp(player.roll, steer*0.42*(player.grounded?1:0.5), 1-Math.exp(-8*dt));
   const g = player.vis.group;
   g.position.set(player.x, player.y, player.z);
   g.rotation.y = player.heading;
-  g.rotation.x = -player.pitch;
+  if(player.flipping){
+    g.rotation.x = player.flipAngle;
+  } else {
+    const wheelieTarget = (input.wheelie && player.grounded && racing) ? -0.5 : 0;
+    const targetPitch = clamp(Math.atan2(player.vy, Math.max(player.speed, 6)), -0.55, 0.65) + wheelieTarget;
+    player.pitch = lerp(player.pitch, targetPitch, 1-Math.exp(-6*dt));
+    g.rotation.x = -player.pitch;
+  }
+  player.roll = lerp(player.roll, player.steerCur*0.42*(player.grounded?1:0.5), 1-Math.exp(-8*dt));
   g.rotation.z = player.roll;
   const spin = player.speed/0.47*dt;
   player.vis.wF.rotation.x -= spin;
   player.vis.wR.rotation.x -= spin;
-  const flap = player.grounded?0:Math.sin(performance.now()*0.02)*0.7;
-  player.vis.wings[0].rotation.z = 0.15+flap;
-  player.vis.wings[1].rotation.z = -0.15-flap;
+  const armRaise = (!player.grounded || input.wheelie) ? -0.45 : 0;
+  player.vis.arms[0].rotation.x = -1.05 + armRaise;
+  player.vis.arms[1].rotation.x = -1.05 + armRaise;
   player.vis.shadow.position.set(player.x, gi.h+0.04, player.z);
   player.vis.shadow.material.opacity = 0.3*clamp(1-(player.y-gi.h)*0.12, 0.15, 1);
 }
@@ -782,9 +929,9 @@ function updateAI(a, dt, t){
   const spin = a.base/0.47*dt;
   a.vis.wF.rotation.x -= spin;
   a.vis.wR.rotation.x -= spin;
-  const flap = a.grounded?0:Math.sin(t*20+a.phase)*0.7;
-  a.vis.wings[0].rotation.z = 0.15+flap;
-  a.vis.wings[1].rotation.z = -0.15-flap;
+  const armRaise = a.grounded?0:-0.45;
+  a.vis.arms[0].rotation.x = -1.05 + armRaise;
+  a.vis.arms[1].rotation.x = -1.05 + armRaise;
   a.vis.shadow.position.set(x, gy+0.04, z);
   a.vis.shadow.material.opacity = 0.3*clamp(1-(a.y-gy)*0.12, 0.15, 1);
 }
