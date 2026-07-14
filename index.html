@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>ぴよモトクロス</title>
+<title>モトクロス</title>
 <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
@@ -16,8 +16,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
 .rbtn{position:fixed;z-index:6;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;touch-action:none;cursor:pointer;}
 #btnL,#btnR{bottom:30px;width:74px;height:74px;border-radius:50%;background:rgba(255,255,255,0.22);border:3px solid rgba(255,255,255,0.85);font-size:32px;}
 #btnL{left:16px;}
-#btnR{left:198px;}
-#btnWheelie{left:92px;bottom:40px;width:104px;height:54px;border-radius:27px;background:rgba(90,90,220,0.55);border:3px solid rgba(255,255,255,0.85);font-size:16px;}
+#btnR{left:170px;}
+#btnWheelie{left:96px;bottom:44px;width:58px;height:58px;border-radius:50%;background:rgba(90,90,220,0.55);border:3px solid rgba(255,255,255,0.85);font-size:26px;}
 #btnAccel{right:20px;bottom:36px;width:140px;height:88px;border-radius:44px;background:rgba(40,180,90,0.6);border:3px solid rgba(255,255,255,0.85);font-size:24px;}
 #btnReset{right:14px;top:calc(env(safe-area-inset-top,0px) + 10px);padding:10px 12px;border-radius:12px;background:rgba(0,0,0,0.45);font-size:15px;min-height:44px;}
 #btnMute{right:14px;top:calc(env(safe-area-inset-top,0px) + 62px);padding:10px 14px;border-radius:12px;background:rgba(0,0,0,0.45);font-size:18px;min-height:44px;}
@@ -45,7 +45,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
 <div class="chip" id="spd">0 km/h</div>
 <div class="rbtn" id="btnL">◀</div>
 <div class="rbtn" id="btnR">▶</div>
-<div class="rbtn" id="btnWheelie">ウイリー</div>
+<div class="rbtn" id="btnWheelie">▽</div>
 <div class="rbtn" id="btnAccel">アクセル</div>
 <div class="rbtn" id="btnReset">コースへもどる</div>
 <div class="rbtn" id="btnMute">🔊</div>
@@ -53,10 +53,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
 <div id="popup"></div>
 <div class="ov" id="titleOv">
   <div class="panel">
-    <h1>🏍️ ぴよモトクロス</h1>
+    <h1>🏍️ モトクロス</h1>
     <p>でこぼこコースを3しゅう！ ライバルより先にゴールしよう！</p>
     <p>◀▶でハンドル、右のアクセルで加速</p>
-    <p>◁ウイリー▷で前輪を上げ、ジャンプ台で押し続けると優雅にバック宙返り！</p>
+    <p>▽ボタンで前輪を上げ、ジャンプ台で押し続けると優雅にバック宙返り！</p>
     <p>ガタガタ道はウイリーで減速をおさえられる。水たまりはすべるので注意！</p>
     <button class="bigbtn" id="btnStart">スタート！</button>
   </div>
@@ -70,7 +70,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
   </div>
 </div>
 <script type="module">
-// ぴよモトクロス v1.0 (2026-07-06)
+// モトクロス v1.1 (2026-07-14)
 // Three.js + 自作アーケード物理 / 120Hz対応deltaTimeクランプ / Web Audio生成サウンド
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
@@ -110,7 +110,7 @@ function terrainH(x,z){
 function grassBump(x,z){ return 0.16*Math.sin(x*1.15)*Math.sin(z*1.32); }
 
 // ===== コース(CatmullRom閉曲線) =====
-const ctrl = [[0,-95],[52,-88],[92,-52],[98,2],[70,42],[84,88],[40,112],[-12,96],[-44,62],[-88,72],[-114,30],[-98,-22],[-58,-42],[-72,-84],[-32,-104]];
+const ctrl = [[0,-95],[52,-88],[92,-52],[98,2],[76.07,39.67],[66.73,79.13],[40,112],[-12,96],[-45.4,70.4],[-82.4,58],[-114,30],[-98,-22],[-70.6,-47.1],[-59.4,-78.9],[-32,-104]];
 const curve = new THREE.CatmullRomCurve3(
   ctrl.map(c=>new THREE.Vector3(c[0], terrainH(c[0],c[1]), c[1])),
   true, 'catmullrom', 0.5
@@ -590,10 +590,16 @@ window.addEventListener('keyup', e=>{
 });
 document.addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
 document.addEventListener('contextmenu', e=>e.preventDefault());
+document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
+document.addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
+document.addEventListener('gesturechange', e=>e.preventDefault(), {passive:false});
 let lastTouchEnd = 0;
+document.addEventListener('touchstart', e=>{
+  if(e.touches.length > 1) e.preventDefault(); // ピンチ防止
+}, {passive:false});
 document.addEventListener('touchend', e=>{
   const now = Date.now();
-  if(now - lastTouchEnd <= 350) e.preventDefault();
+  if(now - lastTouchEnd <= 400) e.preventDefault(); // ダブルタップズーム防止
   lastTouchEnd = now;
 }, {passive:false});
 
@@ -818,7 +824,7 @@ function updatePlayer(dt){
       if(onRamp && input.wheelie && racing && !player.finished){
         player.flipping = true;
         player.flipAngle = -player.pitch; // 現在のウイリー姿勢から連続的にまわる
-        player.flipSpeed = (Math.PI*2)/0.95;
+        player.flipSpeed = (Math.PI*2)/1.6;
       }
     }
     if(player.flipping) player.flipAngle -= player.flipSpeed*dt;
