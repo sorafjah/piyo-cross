@@ -145,10 +145,10 @@ function rampF(u, s0, up, flat, down, h){
   return h*(1-sstep((p-up-flat)/down));
 }
 const JUMPS = [
-  {s:0.125, up:0.010, flat:0.004, down:0.017, h:2.4},
-  {s:0.315, up:0.011, flat:0.005, down:0.019, h:3.0},
-  {s:0.670, up:0.009, flat:0.003, down:0.015, h:2.0},
-  {s:0.855, up:0.012, flat:0.005, down:0.021, h:3.2}
+  {s:0.120, up:0.010, flat:0.004, down:0.017, h:2.4},
+  {s:0.275, up:0.011, flat:0.005, down:0.019, h:3.0},
+  {s:0.545, up:0.009, flat:0.003, down:0.015, h:2.0},
+  {s:0.810, up:0.012, flat:0.005, down:0.021, h:3.2}
 ];
 const WASH_A = 0.44, WASH_B = 0.53; // ウォッシュボード(ガタガタ道)区間
 function featureH(u){
@@ -755,12 +755,12 @@ let dustAcc = 0, splashAcc = 0;
 function updatePlayer(dt){
   const racing = state === 'race';
   const steerTarget = (input.right?1:0) - (input.left?1:0);
-  player.steerCur = lerp(player.steerCur, steerTarget, 1-Math.exp(-7*dt));
+  player.steerCur = lerp(player.steerCur, steerTarget, 1-Math.exp(-4.5*dt));
   const puddleT = puddleFactor(player.u, player.lat);
   const inWash = player.u > WASH_A && player.u < WASH_B;
   if(racing && !player.finished && !player.flipping){
     const eff = (player.grounded?1:0.4) * clamp(player.speed/7+0.15, 0, 1) * (1-puddleT*0.6) * (input.wheelie?0.72:1);
-    player.heading -= player.steerCur*1.5*eff*dt;
+    player.heading -= player.steerCur*1.05*eff*dt;
   }
   // 速度(アクセル方式)
   const onTrack = player.gDist < HALF+0.8;
