@@ -14,10 +14,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
 #mm{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 10px);width:120px;height:120px;z-index:5;pointer-events:none;}
 #spd{position:fixed;right:14px;bottom:140px;z-index:5;pointer-events:none;font-size:22px;}
 .rbtn{position:fixed;z-index:6;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;touch-action:none;cursor:pointer;}
-#btnL,#btnR{bottom:30px;width:74px;height:74px;border-radius:50%;background:rgba(255,255,255,0.22);border:3px solid rgba(255,255,255,0.85);font-size:32px;}
-#btnL{left:16px;}
-#btnR{left:170px;}
-#btnWheelie{left:96px;bottom:44px;width:58px;height:58px;border-radius:50%;background:rgba(90,90,220,0.55);border:3px solid rgba(255,255,255,0.85);font-size:26px;}
+#stickBase{position:fixed;left:24px;bottom:26px;width:132px;height:132px;border-radius:50%;background:rgba(255,255,255,0.18);border:3px solid rgba(255,255,255,0.7);z-index:6;touch-action:none;}
+#stickKnob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin-left:-31px;margin-top:-31px;border-radius:50%;background:rgba(255,255,255,0.55);border:3px solid rgba(255,255,255,0.9);pointer-events:none;}
 #btnAccel{right:20px;bottom:36px;width:140px;height:88px;border-radius:44px;background:rgba(40,180,90,0.6);border:3px solid rgba(255,255,255,0.85);font-size:24px;}
 #btnReset{right:14px;top:calc(env(safe-area-inset-top,0px) + 10px);padding:10px 12px;border-radius:12px;background:rgba(0,0,0,0.45);font-size:15px;min-height:44px;}
 #btnMute{right:14px;top:calc(env(safe-area-inset-top,0px) + 62px);padding:10px 14px;border-radius:12px;background:rgba(0,0,0,0.45);font-size:18px;min-height:44px;}
@@ -43,9 +41,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
   <div class="chip" id="rankEl">-位/4</div>
 </div>
 <div class="chip" id="spd">0 km/h</div>
-<div class="rbtn" id="btnL">◀</div>
-<div class="rbtn" id="btnR">▶</div>
-<div class="rbtn" id="btnWheelie">▽</div>
+<div id="stickBase"><div id="stickKnob"></div></div>
 <div class="rbtn" id="btnAccel">アクセル</div>
 <div class="rbtn" id="btnReset">コースへもどる</div>
 <div class="rbtn" id="btnMute">🔊</div>
@@ -55,8 +51,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#8fd3ff;font-family:
   <div class="panel">
     <h1>🏍️ モトクロス</h1>
     <p>でこぼこコースを3しゅう！ ライバルより先にゴールしよう！</p>
-    <p>◀▶でハンドル、右のアクセルで加速</p>
-    <p>▽ボタンで前輪を上げ、ジャンプ台で押し続けると優雅にバック宙返り！</p>
+    <p>左のスティックでハンドル操作、右のアクセルで加速</p>
+    <p>スティックを下でウイリー、上でブレーキ！ ジャンプ台で倒しっぱなしにすると、下でバック宙返り、上でフロント宙返り！</p>
     <p>ガタガタ道はウイリーで減速をおさえられる。水たまりはすべるので注意！</p>
     <button class="bigbtn" id="btnStart">スタート！</button>
   </div>
@@ -515,7 +511,7 @@ function slotPos(sl){
 const pv = buildBike(0x1fa8a0, 0xffd94a, 0xe23b2e, 'mohawk');
 const player = {vis:pv, x:0, z:0, y:0, vy:0, heading:0, speed:0, grounded:true,
   idx:START_IDX, u:startU, prevU:startU, lat:0, lap:0, cp:false, airT:0, boostT:0,
-  finished:false, prevGy:0, pitch:0, roll:0, gy:0, gDist:0, steerCur:0, flipping:false, flipAngle:0, flipSpeed:0};
+  finished:false, prevGy:0, pitch:0, roll:0, gy:0, gDist:0, steerCur:0, flipping:false, flipAngle:0, flipSpeed:0, flipDir:0};
 const AI_DEF = [
   {c:0xd44a9a, b:0x9fd4ff, h:0x3a6fd8, base:24.5, acc:'catears'},
   {c:0xe07b1f, b:0xbfe89a, h:0x2f9e44, base:26.5, acc:'horns'},
@@ -541,7 +537,7 @@ function placeRacers(){
     x:sp.x, z:sp.z, y:gi.h, vy:0, heading:sp.heading, speed:0, grounded:true,
     idx:gi.idx, u:gi.u, prevU:gi.u, lat:gi.lat, lap:0, cp:false, airT:0, boostT:0,
     finished:false, prevGy:gi.h, pitch:0, roll:0, gy:gi.h, gDist:gi.dist,
-    steerCur:0, flipping:false, flipAngle:0, flipSpeed:0
+    steerCur:0, flipping:false, flipAngle:0, flipSpeed:0, flipDir:0
   });
   ais.forEach((a, i)=>{
     const sl = AI_SLOTS[i];
@@ -564,8 +560,8 @@ function resetRace(){
 }
 placeRacers();
 
-// ===== 入力 =====
-const input = {left:false, right:false, accel:false, wheelie:false};
+// ===== 入力(左:アナログスティック / 右:アクセル) =====
+const input = {steerX:0, stickY:0, accel:false};
 function bindHold(id, prop){
   const el = document.getElementById(id);
   const on = e=>{ e.preventDefault(); input[prop] = true; };
@@ -575,18 +571,69 @@ function bindHold(id, prop){
   el.addEventListener('pointercancel', off);
   el.addEventListener('pointerleave', off);
 }
-bindHold('btnL','left'); bindHold('btnR','right'); bindHold('btnAccel','accel'); bindHold('btnWheelie','wheelie');
+bindHold('btnAccel','accel');
+
+// アナログスティック(左下)
+const stickBase = document.getElementById('stickBase');
+const stickKnob = document.getElementById('stickKnob');
+const STICK_R = 46;
+let stickActive = false, stickId = null;
+function stickCenter(){
+  const r = stickBase.getBoundingClientRect();
+  return {x:r.left+r.width/2, y:r.top+r.height/2};
+}
+function setStick(dx, dy){
+  const d = Math.hypot(dx,dy);
+  if(d > STICK_R){ dx = dx/d*STICK_R; dy = dy/d*STICK_R; }
+  stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+  input.steerX = dx/STICK_R;
+  input.stickY = dy/STICK_R; // 下へ倒すと正(ウィリー)、上へ倒すと負(ブレーキ/フロントフリップ)
+}
+function resetStick(){
+  stickKnob.style.transform = 'translate(0px,0px)';
+  input.steerX = 0; input.stickY = 0;
+}
+stickBase.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  stickActive = true; stickId = e.pointerId;
+  stickBase.setPointerCapture(e.pointerId);
+  const c = stickCenter();
+  setStick(e.clientX-c.x, e.clientY-c.y);
+});
+stickBase.addEventListener('pointermove', e=>{
+  if(!stickActive || e.pointerId !== stickId) return;
+  e.preventDefault();
+  const c = stickCenter();
+  setStick(e.clientX-c.x, e.clientY-c.y);
+});
+function endStick(e){
+  if(e.pointerId !== stickId) return;
+  stickActive = false; stickId = null;
+  resetStick();
+}
+stickBase.addEventListener('pointerup', endStick);
+stickBase.addEventListener('pointercancel', endStick);
+
+// キーボード(補助操作)
+let kbLeft=false, kbRight=false, kbDown=false, kbUp=false;
+function applyKeyboard(){
+  if(stickActive) return;
+  input.steerX = (kbRight?1:0) - (kbLeft?1:0);
+  input.stickY = (kbDown?1:0) - (kbUp?1:0);
+}
 window.addEventListener('keydown', e=>{
-  if(e.key==='ArrowLeft'){ input.left = true; e.preventDefault(); }
-  if(e.key==='ArrowRight'){ input.right = true; e.preventDefault(); }
+  if(e.key==='ArrowLeft'){ kbLeft=true; e.preventDefault(); applyKeyboard(); }
+  if(e.key==='ArrowRight'){ kbRight=true; e.preventDefault(); applyKeyboard(); }
   if(e.key==='ArrowUp'||e.key===' '){ input.accel = true; e.preventDefault(); }
-  if(e.key==='Shift'||e.key==='x'||e.key==='X'){ input.wheelie = true; e.preventDefault(); }
+  if(e.key==='Shift'||e.key==='x'||e.key==='X'){ kbDown=true; e.preventDefault(); applyKeyboard(); }
+  if(e.key==='ArrowDown'||e.key==='c'||e.key==='C'){ kbUp=true; e.preventDefault(); applyKeyboard(); }
 });
 window.addEventListener('keyup', e=>{
-  if(e.key==='ArrowLeft') input.left = false;
-  if(e.key==='ArrowRight') input.right = false;
+  if(e.key==='ArrowLeft'){ kbLeft=false; applyKeyboard(); }
+  if(e.key==='ArrowRight'){ kbRight=false; applyKeyboard(); }
   if(e.key==='ArrowUp'||e.key===' ') input.accel = false;
-  if(e.key==='Shift'||e.key==='x'||e.key==='X') input.wheelie = false;
+  if(e.key==='Shift'||e.key==='x'||e.key==='X'){ kbDown=false; applyKeyboard(); }
+  if(e.key==='ArrowDown'||e.key==='c'||e.key==='C'){ kbUp=false; applyKeyboard(); }
 });
 document.addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
 document.addEventListener('contextmenu', e=>e.preventDefault());
@@ -754,12 +801,14 @@ function updateDust(dt){
 let dustAcc = 0, splashAcc = 0;
 function updatePlayer(dt){
   const racing = state === 'race';
-  const steerTarget = (input.right?1:0) - (input.left?1:0);
+  const steerTarget = clamp(input.steerX, -1, 1);
   player.steerCur = lerp(player.steerCur, steerTarget, 1-Math.exp(-4.5*dt));
+  const wheelieHeld = input.stickY > 0.4;  // スティックを下へ:ウィリー
+  const brakeHeld = input.stickY < -0.4;   // スティックを上へ:ブレーキ/フロントフリップ
   const puddleT = puddleFactor(player.u, player.lat);
   const inWash = player.u > WASH_A && player.u < WASH_B;
   if(racing && !player.finished && !player.flipping){
-    const eff = (player.grounded?1:0.4) * clamp(player.speed/7+0.15, 0, 1) * (1-puddleT*0.6) * (input.wheelie?0.72:1);
+    const eff = (player.grounded?1:0.4) * clamp(player.speed/7+0.15, 0, 1) * (1-puddleT*0.6) * (wheelieHeld?0.72:1);
     player.heading -= player.steerCur*1.05*eff*dt;
   }
   // 速度(アクセル方式)
@@ -768,9 +817,10 @@ function updatePlayer(dt){
   if(racing && !player.finished && !player.flipping){
     if(input.accel) player.speed += (maxSp-player.speed)*(player.boostT>0?1.15:0.62)*dt;
     else player.speed = Math.max(0, player.speed - 9*dt);
+    if(brakeHeld && player.grounded) player.speed = Math.max(0, player.speed - 22*dt);
     player.speed -= player.speed*Math.abs(player.steerCur)*0.16*dt;
     if(inWash){
-      const washDecel = input.wheelie ? 1.0 : 5.5;
+      const washDecel = wheelieHeld ? 1.0 : 5.5;
       player.speed = Math.max(0, player.speed - washDecel*dt);
     }
     if(puddleT > 0.05) player.speed -= player.speed*0.03*puddleT*dt;
@@ -821,17 +871,25 @@ function updatePlayer(dt){
         const rel = wrap01(gi.u - j.s);
         if(rel < j.up+j.flat+0.025){ onRamp = true; break; }
       }
-      if(onRamp && input.wheelie && racing && !player.finished){
-        player.flipping = true;
-        player.flipAngle = -player.pitch; // 現在のウイリー姿勢から連続的にまわる
-        player.flipSpeed = (Math.PI*2)/1.6;
+      if(onRamp && racing && !player.finished){
+        if(wheelieHeld){
+          player.flipping = true;
+          player.flipDir = -1; // バックフリップ(ウイリー方向の延長)
+          player.flipAngle = -player.pitch;
+          player.flipSpeed = (Math.PI*2)/1.6;
+        } else if(brakeHeld){
+          player.flipping = true;
+          player.flipDir = 1; // フロントフリップ(逆回転)
+          player.flipAngle = -player.pitch;
+          player.flipSpeed = (Math.PI*2)/1.6;
+        }
       }
     }
-    if(player.flipping) player.flipAngle -= player.flipSpeed*dt;
+    if(player.flipping) player.flipAngle += player.flipDir*player.flipSpeed*dt;
   }
   if(player.grounded && !wasG){
     if(player.flipping){
-      popup('優雅なバックフリップ！🌀');
+      popup(player.flipDir < 0 ? '優雅なバックフリップ！🌀' : 'かっこいいフロントフリップ！🤸');
       sfxBoost();
       player.boostT = 1.3;
       player.flipping = false;
@@ -882,8 +940,8 @@ function updatePlayer(dt){
   if(player.flipping){
     player.vis.pitchGroup.rotation.x = player.flipAngle;
   } else {
-    const wheelieTarget = (input.wheelie && player.grounded && racing) ? 0.6 : 0;
-    const targetPitch = clamp(Math.atan2(player.vy, Math.max(player.speed, 6)), -0.55, 0.65) + wheelieTarget;
+    const leanTarget = (player.grounded && racing) ? (wheelieHeld ? 0.6 : (brakeHeld ? -0.32 : 0)) : 0;
+    const targetPitch = clamp(Math.atan2(player.vy, Math.max(player.speed, 6)), -0.55, 0.65) + leanTarget;
     player.pitch = lerp(player.pitch, targetPitch, 1-Math.exp(-6*dt));
     player.vis.pitchGroup.rotation.x = -player.pitch;
   }
@@ -892,7 +950,7 @@ function updatePlayer(dt){
   const spin = player.speed/0.47*dt;
   player.vis.wF.rotation.x -= spin;
   player.vis.wR.rotation.x -= spin;
-  const armRaise = (!player.grounded || input.wheelie) ? -0.45 : 0;
+  const armRaise = (!player.grounded || wheelieHeld || brakeHeld) ? -0.45 : 0;
   player.vis.arms[0].rotation.x = -1.05 + armRaise;
   player.vis.arms[1].rotation.x = -1.05 + armRaise;
   player.vis.shadow.position.set(player.x, gi.h+0.04, player.z);
