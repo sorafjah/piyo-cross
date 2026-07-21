@@ -513,9 +513,9 @@ const player = {vis:pv, x:0, z:0, y:0, vy:0, heading:0, speed:0, grounded:true,
   idx:START_IDX, u:startU, prevU:startU, lat:0, lap:0, cp:false, airT:0, boostT:0,
   finished:false, prevGy:0, pitch:0, roll:0, gy:0, gDist:0, steerCur:0, flipping:false, flipAngle:0, flipSpeed:0, flipDir:0};
 const AI_DEF = [
-  {c:0xd44a9a, b:0x9fd4ff, h:0x3a6fd8, base:24.5, acc:'catears'},
-  {c:0xe07b1f, b:0xbfe89a, h:0x2f9e44, base:26.5, acc:'horns'},
-  {c:0x6a4ad4, b:0xffc0cb, h:0xf2b705, base:28.5, acc:'spikes'}
+  {c:0xd44a9a, b:0x9fd4ff, h:0x3a6fd8, base:19.0, acc:'catears'},
+  {c:0xe07b1f, b:0xbfe89a, h:0x2f9e44, base:20.5, acc:'horns'},
+  {c:0x6a4ad4, b:0xffc0cb, h:0xf2b705, base:22.0, acc:'spikes'}
 ];
 const AI_SLOTS = [0, 2, 3];
 const ais = AI_DEF.map(d=>({
@@ -523,7 +523,8 @@ const ais = AI_DEF.map(d=>({
   colStr: '#'+d.c.toString(16).padStart(6,'0'),
   base: d.base, uTotal: startU, off:0, startLat:0,
   phase: Math.random()*6.28, wRate: 0.25+Math.random()*0.2,
-  y:0, vy:0, prevGy:0, grounded:true, finished:false, pitch:0, gx:0, gz:0
+  y:0, vy:0, prevGy:0, grounded:true, finished:false, pitch:0, gx:0, gz:0,
+  mistakeTimer: 4+Math.random()*6, mistakeActive:false, mistakeDur:0, mistakeLat:0
 }));
 
 // ===== 状態 =====
@@ -547,6 +548,7 @@ function placeRacers(){
     const gy = trackYat(startU) + featureH(startU);
     a.prevGy = gy; a.y = gy; a.vy = 0;
     a.grounded = true; a.finished = false; a.pitch = 0;
+    a.mistakeTimer = 4+Math.random()*6; a.mistakeActive = false; a.mistakeDur = 0; a.mistakeLat = 0;
     const s = samples[START_IDX];
     a.gx = s.pos.x + s.left.x*a.startLat;
     a.gz = s.pos.z + s.left.z*a.startLat;
@@ -813,7 +815,7 @@ function updatePlayer(dt){
   }
   // 速度(アクセル方式)
   const onTrack = player.gDist < HALF+0.8;
-  const maxSp = (onTrack?33:14) * (player.boostT>0?1.28:1);
+  const maxSp = (onTrack?33:22) * (player.boostT>0?1.28:1);
   if(racing && !player.finished && !player.flipping){
     if(input.accel) player.speed += (maxSp-player.speed)*(player.boostT>0?1.15:0.62)*dt;
     else player.speed = Math.max(0, player.speed - 9*dt);
@@ -971,15 +973,31 @@ function samplePos(u, out){
 }
 function updateAI(a, dt, t){
   if(state === 'race' || state === 'finished'){
+    // たまにミス(コースアウト気味にふらつく)する
+    if(state === 'race'){
+      a.mistakeTimer -= dt;
+      if(!a.mistakeActive && a.mistakeTimer <= 0){
+        a.mistakeActive = true;
+        a.mistakeDur = 0.9 + Math.random()*1.3;
+        a.mistakeLat = (Math.random()<0.5?-1:1) * (5.5 + Math.random()*3);
+        a.mistakeTimer = 10 + Math.random()*16;
+      }
+      if(a.mistakeActive){
+        a.mistakeDur -= dt;
+        if(a.mistakeDur <= 0) a.mistakeActive = false;
+      }
+    }
     const playerProg = player.lap + player.u;
-    const spd = a.base * (1 + clamp((playerProg-a.uTotal)*0.5, -0.08, 0.18));
+    const spd = a.base * (1 + clamp((playerProg-a.uTotal)*0.5, -0.1, 0.12)) * (a.mistakeActive ? 0.3 : 1);
     a.uTotal += spd/trackLen*dt;
   }
   if(!a.finished && a.uTotal >= 3){ a.finished = true; finishedAI++; }
   const u = wrap01(a.uTotal);
   const blendW = clamp(raceTime/3, 0, 1);
   const wander = Math.sin(t*a.wRate*2+a.phase)*2.6;
-  a.off = lerp(a.startLat, wander, blendW);
+  const baseOff = lerp(a.startLat, wander, blendW);
+  const targetOff = a.mistakeActive ? a.mistakeLat : baseOff;
+  a.off = lerp(a.off, targetOff, 1-Math.exp(-2.5*dt));
   samplePos(u, _sp);
   const x = _sp.x+_sp.lx*a.off, z = _sp.z+_sp.lz*a.off;
   a.gx = x; a.gz = z;
